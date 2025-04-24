@@ -1,0 +1,36 @@
+### Creation of a mock data set that resembled the orginal business use case (including the analysis and relations detected) 
+
+
+import pandas as pd
+import numpy as np
+import random
+
+# Set random seed for reproducibility
+np.random.seed(42)
+random.seed(42)
+
+# Constants Creation for Data set
+N = 200
+#Clean up the ids
+student_ids = [f"S{i:03}" for i in range(1, N+1)]
+
+# Define Indivdiual Factor (survey) options
+motivational_goals = ['promotion', 'new job', 'for fun']
+help_seeking_types = ['adaptive', 'avoidant']
+sdl_experience = ['no experience', 'yes, but not finished', 'yes and completed']
+familiarity_levels = [1, 2, 3, 4]
+
+# Generate Mock data with random seeds and relations
+def assign_motivation():
+    return np.random.choice(motivational_goals, p=[0.35, 0.35, 0.30])
+
+def assign_help_seeking():
+    return np.random.choice(help_seeking_types)
+
+def assign_sdl_experience():
+    return np.random.choice(sdl_experience, p=[0.3, 0.3, 0.4])
+
+def assign_familiarity():
+    return np.random.choice(familiarity_levels)
+
+individual_data.to_csv("survey_data_mock.csv", index=False)
