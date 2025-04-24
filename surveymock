@@ -1,6 +1,7 @@
 ### Creation of a mock data set that resembled the orginal business use case (including the analysis and relations detected) 
 
 
+######## CREATE the Survey individual factors data intially randomized to IDS #################
 import pandas as pd
 import numpy as np
 import random
@@ -9,28 +10,118 @@ import random
 np.random.seed(42)
 random.seed(42)
 
-# Constants Creation for Data set
+# Constants
 N = 200
-#Clean up the ids
 student_ids = [f"S{i:03}" for i in range(1, N+1)]
 
-# Define Indivdiual Factor (survey) options
-motivational_goals = ['promotion', 'new job', 'for fun']
+# Define options
+motivation_types = ['promotion', 'new job', 'for fun']
 help_seeking_types = ['adaptive', 'avoidant']
 sdl_experience = ['no experience', 'yes, but not finished', 'yes and completed']
 familiarity_levels = [1, 2, 3, 4]
 
-# Generate Mock data with random seeds and relations
-def assign_motivation():
-    return np.random.choice(motivational_goals, p=[0.35, 0.35, 0.30])
+individual_data = pd.DataFrame({
+    'student_id': student_ids,
+    'motivation': np.random.choice(motivation_types, N, p=[0.3, 0.4, 0.3]),
+    'help_seeking_type': np.random.choice(help_seeking_types, N),
+    'sdl_experience': np.random.choice(sdl_experience, N, p=[0.3, 0.4, 0.3]),
+    'content_familiarity': np.random.choice(familiarity_levels, N)
+})
 
-def assign_help_seeking():
-    return np.random.choice(help_seeking_types)
 
-def assign_sdl_experience():
-    return np.random.choice(sdl_experience, p=[0.3, 0.3, 0.4])
+######## CREATE the daily behaviors  data that is related to id factors  #################
+import numpy as np
+import pandas as pd
 
-def assign_familiarity():
-    return np.random.choice(familiarity_levels)
+# --- Daily Behavioral Data ---
+date_range = pd.date_range(start='2024-01-01', periods=84)
+daily_data = []
 
-individual_data.to_csv("survey_data_mock.csv", index=False)
+# Graduation: 60% of students
+n_students = len(student_ids)
+n_graduated = int(0.6 * n_students)
+graduated_ids = np.random.choice(student_ids, size=n_graduated, replace=False)
+graduation_flags = pd.Series(False, index=student_ids)
+graduation_flags.loc[graduated_ids] = True
+
+# Randomly assign fast or slow among graduates
+np.random.seed(42)
+graduation_speed = {
+    sid: np.random.choice(['fast', 'slow'])
+    for sid in graduated_ids
+}
+
+for sid in student_ids:
+    student_row = individual_data[individual_data.student_id == sid].iloc[0]
+    graduated = graduation_flags[sid]
+    speed_type = graduation_speed.get(sid, None)
+
+    engaged = (student_row['motivation'] in ['promotion', 'new job']) or student_row['sdl_experience'] == 'yes and completed'
+    login_probability = 0.7 if engaged else 0.3
+
+    # Choose login days
+    login_days = [date for date in date_range if np.random.rand() < login_probability]
+
+    # If graduated, ensure minimum login days to spread 100 submissions
+    if graduated and len(login_days) < 10:
+        login_days = sorted(np.random.choice(date_range, size=10, replace=False).tolist())
+
+    if graduated:
+        # Sort login_days based on fast or slow completer
+        if speed_type == 'fast':
+            login_days = sorted(login_days)[:len(login_days)//2 + 1]  # Front-load
+        elif speed_type == 'slow':
+            login_days = sorted(login_days)[len(login_days)//2:]      # Back-load
+
+        # Dirichlet for variability, scaled to sum to 100
+        weights = np.random.dirichlet(np.ones(len(login_days)), size=1)[0]
+        submissions_per_day = np.round(weights * 100).astype(int)
+
+        # Ensure exactly 100
+        while submissions_per_day.sum() != 100:
+            diff = 100 - submissions_per_day.sum()
+            idx = np.argmax(submissions_per_day)
+            submissions_per_day[idx] += diff
+
+    for i, date in enumerate(date_range):
+        if date not in login_days:
+            daily_data.append([sid, date, 0, 0, 0, 0, 0])
+        else:
+            clicks = np.random.randint(1, 6)
+            submissions = 0
+            if graduated:
+                submissions = submissions_per_day[login_days.index(date)]
+            else:
+                submissions = np.random.poisson(1)
+            proficiency = np.clip(np.random.normal(loc=75 + 5 * student_row['content_familiarity'], scale=10), 0, 100)
+            bot_help = np.random.poisson(1 if student_row['help_seeking_type'] == 'adaptive' else 0.3)
+            human_help = np.random.binomial(1, 0.2 if student_row['help_seeking_type'] == 'adaptive' else 0.05)
+            daily_data.append([sid, date, clicks, submissions, proficiency, bot_help, human_help])
+
+
+
+######## CREATE the csats  data   #################
+csat_start = np.random.randint(1, 6, N)
+csat_change = np.random.choice([-1, 0, 1], N, p=[0.2, 0.5, 0.3])
+csat_end = np.clip(csat_start + csat_change, 1, 5)
+
+csat_data = pd.DataFrame({
+    'student_id': student_ids,
+    'csat_start': csat_start,
+    'csat_end': csat_end
+})
+
+
+######## CREATE the interview data   #################
+def generate_interview(start, end):
+    if end - start > 0:
+        return "I really started to enjoy the platform more over time."
+    elif end - start < 0:
+        return "I felt things got harder or less helpful as I progressed."
+    else:
+        return "My experience stayed pretty consistent throughout."
+
+interview_data = pd.DataFrame({
+    'student_id': student_ids,
+    'interview_summary': [generate_interview(start, end) for start, end in zip(csat_start, csat_end)]
+})
